@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_USER = 'balaakashreddyy'
-        DOCKERHUB_PASS = credentials('dockerhub-pass')
+        DOCKERHUB_PASS = credentials('dockerhub-login')
         EC2_IP = 'YOUR_EC2_PUBLIC_IP'  // e.g. 13.234.45.120
         PEM_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\my-key.pem'
     }
@@ -110,3 +110,4 @@ pipeline {
         }
     }
 }
+
