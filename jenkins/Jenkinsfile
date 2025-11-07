@@ -1,0 +1,72 @@
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY = 'balaakashreddyy'      // your DockerHub username
+        APP_NAME = 'job-portal-canary'
+        GIT_REPO = 'https://github.com/AkashReddy123/job-portal-canary.git'
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo '📥 Checking out project source from GitHub...'
+                git branch: 'main', url: "${GIT_REPO}"
+            }
+        }
+
+        stage('Build Frontend V1 & V2') {
+            steps {
+                echo '🏗️ Building Frontend V1...'
+                dir('frontend-v1') {
+                    bat 'npm install'
+                    bat 'npm run build'
+                }
+                echo '🏗️ Building Frontend V2...'
+                dir('frontend-v2') {
+                    bat 'npm install'
+                    bat 'npm run build'
+                }
+            }
+        }
+
+        stage('Build Backend') {
+            steps {
+                echo '⚙️ Building Backend...'
+                dir('backend') {
+                    bat 'npm install'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                echo '🐳 Building Docker Images...'
+                bat 'docker-compose build'
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-login', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    bat 'docker login -u %DOCKER_USER% -p %DOCKER_PASS%'
+                    bat 'docker tag web_v1 %DOCKER_USER%/%APP_NAME%-web_v1:latest'
+                    bat 'docker tag web_v2 %DOCKER_USER%/%APP_NAME%-web_v2:latest'
+                    bat 'docker tag backend %DOCKER_USER%/%APP_NAME%-backend:latest'
+                    bat 'docker push %DOCKER_USER%/%APP_NAME%-web_v1:latest'
+                    bat 'docker push %DOCKER_USER%/%APP_NAME%-web_v2:latest'
+                    bat 'docker push %DOCKER_USER%/%APP_NAME%-backend:latest'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully!'
+        }
+        failure {
+            echo '❌ Build failed! Check Jenkins logs for details.'
+        }
+    }
+}
