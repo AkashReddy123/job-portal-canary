@@ -2,29 +2,28 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = 'balaakashreddyy'      // DockerHub username
-        APP_NAME = 'job-portal-canary'
-        GIT_REPO = 'https://github.com/AkashReddy123/job-portal-canary.git'
-        EC2_IP = '50.17.54.191'            // 👈 Replace with EC2 Public IP
+        DOCKERHUB_USER = 'balaakashreddyy'
+        DOCKERHUB_PASS = credentials('dockerhub-pass')
+        EC2_HOST = 'ec2-user@50.17.54.191'
+        PEM_KEY_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\job-portal.pem'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                echo '📥 Checking out project source from GitHub...'
-                git branch: 'main', url: "${GIT_REPO}"
+                echo "📥 Checking out project source from GitHub..."
+                git branch: 'main', url: 'https://github.com/AkashReddy123/job-portal-canary.git'
             }
         }
 
         stage('Build Frontend V1 & V2') {
             steps {
-                echo '🏗️ Building Frontend V1...'
+                echo "🏗️ Building Frontend V1..."
                 dir('frontend-v1') {
                     bat 'npm install'
                     bat 'npm run build'
                 }
-
-                echo '🏗️ Building Frontend V2...'
+                echo "🏗️ Building Frontend V2..."
                 dir('frontend-v2') {
                     bat 'npm install'
                     bat 'npm run build'
@@ -34,7 +33,7 @@ pipeline {
 
         stage('Build Backend') {
             steps {
-                echo '⚙️ Building Backend...'
+                echo "⚙️ Building Backend..."
                 dir('backend') {
                     bat 'npm install'
                 }
@@ -43,101 +42,71 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                echo '🐳 Building Docker Images...'
+                echo "🐳 Building Docker Images..."
                 bat 'docker-compose build'
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                echo '📦 Pushing Docker Images to DockerHub...'
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-login', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    bat '''
-                    docker login -u %DOCKER_USER% -p %DOCKER_PASS%
-
-                    docker tag job-portal-canary-pipeline-web_v1:latest %DOCKER_USER%/job-portal-canary-web_v1:latest
-                    docker tag job-portal-canary-pipeline-web_v2:latest %DOCKER_USER%/job-portal-canary-web_v2:latest
-                    docker tag job-portal-canary-pipeline-backend:latest %DOCKER_USER%/job-portal-canary-backend:latest
-
-                    docker push %DOCKER_USER%/job-portal-canary-web_v1:latest
-                    docker push %DOCKER_USER%/job-portal-canary-web_v2:latest
-                    docker push %DOCKER_USER%/job-portal-canary-backend:latest
-                    '''
-                }
+                echo "📦 Pushing Docker Images to DockerHub..."
+                bat """
+                    docker login -u %DOCKERHUB_USER% -p %DOCKERHUB_PASS%
+                    docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
+                    docker tag job-portal-canary-pipeline-web_v2:latest %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
+                    docker tag job-portal-canary-pipeline-backend:latest %DOCKERHUB_USER%/job-portal-canary-backend:latest
+                    docker push %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
+                    docker push %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
+                    docker push %DOCKERHUB_USER%/job-portal-canary-backend:latest
+                """
             }
         }
 
         stage('Deploy Canary (V2 alongside V1)') {
             steps {
-                echo '🚀 Deploying Canary version (V2) to EC2...'
-                sshagent(['ec2-key']) {
-                    bat '''
-                    ssh -o StrictHostKeyChecking=no ubuntu@%EC2_IP% "
-                        cd /home/ubuntu/job-portal-canary &&
-                        git pull &&
-                        echo '🟡 Starting Canary containers (V2)...' &&
-                        docker-compose -f docker-compose.yml up -d web_v2
-                    "
-                    '''
-                }
+                echo "🚀 Deploying Canary version (V2) to EC2..."
+                bat """
+                    echo Running Canary Deploy on EC2...
+                    pscp -i "%PEM_KEY_PATH%" docker-compose.yml ubuntu@YOUR_EC2_PUBLIC_IP:/home/ubuntu/
+                    plink -i "%PEM_KEY_PATH%" ubuntu@YOUR_EC2_PUBLIC_IP "docker-compose down && docker-compose pull && docker-compose up -d"
+                """
             }
         }
 
         stage('Traffic Split 90/10') {
             steps {
-                echo '⚖️ Adjusting NGINX traffic to 90% V1 and 10% V2...'
-                sshagent(['ec2-key']) {
-                    bat '''
-                    ssh -o StrictHostKeyChecking=no ubuntu@%EC2_IP% "
-                        sudo sed -i 's/weight=9;/weight=9;/' nginx/nginx.conf
-                        sudo sed -i 's/weight=1;/weight=1;/' nginx/nginx.conf
-                        sudo docker restart nginx_lb
-                    "
-                    '''
-                }
+                echo "🔁 Adjusting NGINX to split 90/10 traffic between V1 & V2..."
+                bat """
+                    plink -i "%PEM_KEY_PATH%" ubuntu@YOUR_EC2_PUBLIC_IP "sudo cp /home/ubuntu/nginx_90_10.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
+                """
             }
         }
 
         stage('Promote Canary (Switch Fully to V2)') {
-            input {
-                message "🟢 Promote Canary (V2) to full production?"
-                ok "Promote"
-            }
             steps {
-                echo '✅ Promoting Canary (V2) to full traffic...'
-                sshagent(['ec2-key']) {
-                    bat '''
-                    ssh -o StrictHostKeyChecking=no ubuntu@%EC2_IP% "
-                        sudo sed -i 's/weight=9;/weight=0;/' nginx/nginx.conf &&
-                        sudo sed -i 's/weight=1;/weight=10;/' nginx/nginx.conf &&
-                        sudo docker restart nginx_lb
-                    "
-                    '''
-                }
+                echo "🚦 Promoting Canary: 100% traffic to V2..."
+                bat """
+                    plink -i "%PEM_KEY_PATH%" ubuntu@YOUR_EC2_PUBLIC_IP "sudo cp /home/ubuntu/nginx_full_v2.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
+                """
             }
         }
 
         stage('Remove Old Version (V1)') {
             steps {
-                echo '🧹 Removing old V1 containers after successful canary rollout...'
-                sshagent(['ec2-key']) {
-                    bat '''
-                    ssh -o StrictHostKeyChecking=no ubuntu@%EC2_IP% "
-                        docker-compose stop web_v1 &&
-                        docker-compose rm -f web_v1
-                    "
-                    '''
-                }
+                echo "🧹 Removing old V1 containers..."
+                bat """
+                    plink -i "%PEM_KEY_PATH%" ubuntu@YOUR_EC2_PUBLIC_IP "docker stop web_v1 && docker rm web_v1"
+                """
             }
         }
     }
 
     post {
         success {
-            echo '✅ Zero-downtime Canary Deployment completed successfully!'
+            echo "✅ Canary deployment completed successfully!"
         }
         failure {
-            echo '❌ Something failed during Canary rollout! Please check logs.'
+            echo "❌ Something failed during Canary rollout! Please check logs."
         }
     }
 }
