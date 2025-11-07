@@ -1,0 +1,51 @@
+services:
+  # === MongoDB Service ===
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # === Backend (Node.js + Express) ===
+  backend:
+    build: ./backend
+    container_name: backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongo
+
+  # === Frontend Version 1 (Stable) ===
+  web_v1:
+    build: ./frontend-v1
+    container_name: web_v1
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
+  # === Frontend Version 2 (Canary) ===
+  web_v2:
+    build: ./frontend-v2
+    container_name: web_v2
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
+  # === NGINX Load Balancer ===
+  nginx_lb:
+    build: ./nginx
+    container_name: nginx_lb
+    ports:
+      - "80:80"
+    depends_on:
+      - web_v1
+      - web_v2
+
+volumes:
+  mongo-data:
