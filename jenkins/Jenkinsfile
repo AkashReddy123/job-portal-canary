@@ -49,17 +49,18 @@ pipeline {
         stage('Push to DockerHub') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-login', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    bat 'docker login -u %DOCKER_USER% -p %DOCKER_PASS%'
-                    bat 'docker tag web_v1 %DOCKER_USER%/%APP_NAME%-web_v1:latest'
-                    bat 'docker tag web_v2 %DOCKER_USER%/%APP_NAME%-web_v2:latest'
-                    bat 'docker tag backend %DOCKER_USER%/%APP_NAME%-backend:latest'
-                    bat 'docker push %DOCKER_USER%/%APP_NAME%-web_v1:latest'
-                    bat 'docker push %DOCKER_USER%/%APP_NAME%-web_v2:latest'
-                    bat 'docker push %DOCKER_USER%/%APP_NAME%-backend:latest'
+                    bat '''
+                    docker login -u %DOCKER_USER% -p %DOCKER_PASS%
+                    docker tag job-portal-canary-pipeline-web_v1:latest %DOCKER_USER%/job-portal-canary-web_v1:latest
+                    docker tag job-portal-canary-pipeline-web_v2:latest %DOCKER_USER%/job-portal-canary-web_v2:latest
+                    docker tag job-portal-canary-pipeline-backend:latest %DOCKER_USER%/job-portal-canary-backend:latest
+                    docker push %DOCKER_USER%/job-portal-canary-web_v1:latest
+                    docker push %DOCKER_USER%/job-portal-canary-web_v2:latest
+                    docker push %DOCKER_USER%/job-portal-canary-backend:latest
+                    '''
                 }
             }
         }
-    }
 
     post {
         success {
@@ -70,3 +71,4 @@ pipeline {
         }
     }
 }
+
