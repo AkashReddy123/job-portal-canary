@@ -22,6 +22,7 @@ pipeline {
                     bat 'npm install'
                     bat 'npm run build'
                 }
+
                 echo '🏗️ Building Frontend V2...'
                 dir('frontend-v2') {
                     bat 'npm install'
@@ -48,12 +49,15 @@ pipeline {
 
         stage('Push to DockerHub') {
             steps {
+                echo '📦 Pushing Docker Images to DockerHub...'
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-login', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     bat '''
                     docker login -u %DOCKER_USER% -p %DOCKER_PASS%
+
                     docker tag job-portal-canary-pipeline-web_v1:latest %DOCKER_USER%/job-portal-canary-web_v1:latest
                     docker tag job-portal-canary-pipeline-web_v2:latest %DOCKER_USER%/job-portal-canary-web_v2:latest
                     docker tag job-portal-canary-pipeline-backend:latest %DOCKER_USER%/job-portal-canary-backend:latest
+
                     docker push %DOCKER_USER%/job-portal-canary-web_v1:latest
                     docker push %DOCKER_USER%/job-portal-canary-web_v2:latest
                     docker push %DOCKER_USER%/job-portal-canary-backend:latest
@@ -61,6 +65,7 @@ pipeline {
                 }
             }
         }
+    } // 👈 THIS was missing before!
 
     post {
         success {
@@ -71,4 +76,3 @@ pipeline {
         }
     }
 }
-
