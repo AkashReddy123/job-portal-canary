@@ -4,12 +4,11 @@ pipeline {
     environment {
         DOCKERHUB_USER = 'balaakashreddyy'
         DOCKERHUB_PASS = credentials('dockerhub-login')
-        EC2_IP = '34.229.241.16'
-        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\job-portal-new-key.ppk'
+        EC2_IP = '54.224.248.68'
+        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\job-portal-key-final.ppk'
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 echo "📥 Checking out project source from GitHub..."
@@ -69,7 +68,7 @@ pipeline {
                 echo "🚀 Deploying Canary version (V2) to EC2 using plink..."
                 bat """
                     pscp -i "%PPK_PATH%" docker-compose.yml ubuntu@%EC2_IP%:/home/ubuntu/
-                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "cd /home/ubuntu && docker-compose down && docker-compose pull && docker-compose up -d"
+                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "sudo docker-compose down || true && sudo docker-compose pull && sudo docker-compose up -d"
                 """
             }
         }
@@ -96,7 +95,7 @@ pipeline {
             steps {
                 echo "🧹 Removing old V1 container..."
                 bat """
-                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "docker stop web_v1 && docker rm web_v1 || true"
+                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "sudo docker stop web_v1 && sudo docker rm web_v1"
                 """
             }
         }
