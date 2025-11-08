@@ -4,8 +4,7 @@ pipeline {
     environment {
         DOCKERHUB_USER = 'balaakashreddyy'
         DOCKERHUB_PASS = credentials('dockerhub-login')
-        EC2_IP = 'YOUR_EC2_PUBLIC_IP'  // e.g. 13.234.45.120
-        PEM_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\my-key.pem'
+        EC2_HOST = '34.229.241.16'
     }
 
     stages {
@@ -65,38 +64,58 @@ pipeline {
 
         stage('Deploy Canary (V2) to EC2') {
             steps {
-                echo "🚀 Deploying Canary version (V2) to EC2 using plink..."
-                bat """
-                    pscp -i "%PEM_PATH%" docker-compose.yml ubuntu@50.17.54.191:/home/ubuntu/
-                    plink -i "%PEM_PATH%" ubuntu@50.17.54.191 "docker-compose down && docker-compose pull && docker-compose up -d"
-                """
+                echo "🚀 Deploying Canary version (V2) to EC2..."
+                sshagent(['ec2-ssh']) {
+                    bat """
+                        scp -o StrictHostKeyChecking=no docker-compose.yml ubuntu@${EC2_HOST}:/home/ubuntu/
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "
+                            docker-compose down &&
+                            docker-compose pull &&
+                            docker-compose up -d
+                        "
+                    """
+                }
             }
         }
 
         stage('Traffic Split 90/10') {
             steps {
                 echo "🔀 Updating NGINX for 90/10 traffic split..."
-                bat """
-                    plink -i "%PEM_PATH%" ubuntu@50.17.54.191 "sudo cp /home/ubuntu/nginx_90_10.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
-                """
+                sshagent(['ec2-ssh']) {
+                    bat """
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "
+                            sudo cp /home/ubuntu/nginx_90_10.conf /etc/nginx/nginx.conf &&
+                            sudo systemctl reload nginx
+                        "
+                    """
+                }
             }
         }
 
         stage('Promote Canary to 100%') {
             steps {
                 echo "🚦 Promoting Canary version (100% V2)..."
-                bat """
-                    plink -i "%PEM_PATH%" ubuntu@50.17.54.191 "sudo cp /home/ubuntu/nginx_full_v2.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
-                """
+                sshagent(['ec2-ssh']) {
+                    bat """
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "
+                            sudo cp /home/ubuntu/nginx_full_v2.conf /etc/nginx/nginx.conf &&
+                            sudo systemctl reload nginx
+                        "
+                    """
+                }
             }
         }
 
         stage('Remove Old V1') {
             steps {
                 echo "🧹 Removing old V1 container..."
-                bat """
-                    plink -i "%PEM_PATH%" ubuntu@50.17.54.191 "docker stop web_v1 && docker rm web_v1"
-                """
+                sshagent(['ec2-ssh']) {
+                    bat """
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} "
+                            docker stop web_v1 && docker rm web_v1 || true
+                        "
+                    """
+                }
             }
         }
     }
@@ -110,5 +129,3 @@ pipeline {
         }
     }
 }
-
-
