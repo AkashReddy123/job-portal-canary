@@ -3,12 +3,13 @@ pipeline {
 
     environment {
         DOCKERHUB_USER = 'balaakashreddyy'
-        DOCKERHUB_PASS = credentials('dockerhub-login')
-        EC2_IP = '54.224.248.68'
-        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\job-portal-key-final.ppk'
+        DOCKERHUB_PASS = credentials('dockerhub-login')   // Jenkins credential ID
+        EC2_IP = '52.54.181.179'
+        PEM_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk'
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 echo "📥 Checking out project source from GitHub..."
@@ -63,39 +64,48 @@ pipeline {
             }
         }
 
+        stage('Test EC2 Connection') {
+            steps {
+                echo "🔌 Testing EC2 SSH connectivity..."
+                bat """
+                    plink -batch -i "%PEM_PATH%" ubuntu@%EC2_IP% "echo ✅ SSH connection successful!"
+                """
+            }
+        }
+
         stage('Deploy Canary (V2) to EC2') {
             steps {
-                echo "🚀 Deploying Canary version (V2) to EC2 using plink..."
+                echo "🚀 Deploying Canary version (V2) to EC2..."
                 bat """
-                    pscp -i "%PPK_PATH%" docker-compose.yml ubuntu@%EC2_IP%:/home/ubuntu/
-                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "sudo docker-compose down || true && sudo docker-compose pull && sudo docker-compose up -d"
+                    pscp -i "%PEM_PATH%" docker-compose.yml ubuntu@%EC2_IP%:/home/ubuntu/
+                    plink -i "%PEM_PATH%" ubuntu@%EC2_IP% "sudo docker-compose down || true && sudo docker-compose pull && sudo docker-compose up -d"
                 """
             }
         }
 
         stage('Traffic Split 90/10') {
             steps {
-                echo "🔀 Updating NGINX for 90/10 traffic split..."
+                echo "🔀 Adjusting NGINX for 90/10 traffic split..."
                 bat """
-                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "sudo cp /home/ubuntu/nginx_90_10.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
+                    plink -i "%PEM_PATH%" ubuntu@%EC2_IP% "sudo cp /home/ubuntu/nginx_90_10.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
                 """
             }
         }
 
         stage('Promote Canary to 100%') {
             steps {
-                echo "🚦 Promoting Canary version (100% V2)..."
+                echo "🚦 Promoting Canary version to 100% (V2 live)..."
                 bat """
-                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "sudo cp /home/ubuntu/nginx_full_v2.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
+                    plink -i "%PEM_PATH%" ubuntu@%EC2_IP% "sudo cp /home/ubuntu/nginx_full_v2.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
                 """
             }
         }
 
-        stage('Remove Old V1') {
+        stage('Clean Up Old V1') {
             steps {
-                echo "🧹 Removing old V1 container..."
+                echo "🧹 Cleaning up old version (V1)..."
                 bat """
-                    plink -i "%PPK_PATH%" ubuntu@%EC2_IP% "sudo docker stop web_v1 && sudo docker rm web_v1"
+                    plink -i "%PEM_PATH%" ubuntu@%EC2_IP% "sudo docker stop web_v1 || true && sudo docker rm web_v1 || true"
                 """
             }
         }
@@ -103,10 +113,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Canary deployment pipeline completed successfully!"
+            echo "✅ Canary Deployment Completed Successfully!"
         }
         failure {
-            echo "❌ Canary deployment failed — check Jenkins logs."
+            echo "❌ Deployment Failed — Check Jenkins Logs!"
         }
     }
 }
