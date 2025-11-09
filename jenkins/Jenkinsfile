@@ -3,29 +3,29 @@ pipeline {
 
     environment {
         DOCKERHUB_USER = 'balaakashreddyy'
-        DOCKERHUB_PASS = credentials('dockerhub-login')   // Jenkins Credential ID
-        EC2_IP = '52.54.181.179'                          // Your EC2 public IP
-        PEM_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk'  // Path to .ppk key
+        DOCKERHUB_PASS = credentials('dockerhub-login') // Jenkins credential ID
+        EC2_IP = '52.54.181.179'
+        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk'
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                echo "📥 Checking out project source from GitHub..."
+                echo '📥 Checking out project source from GitHub...'
                 git branch: 'main', url: 'https://github.com/AkashReddy123/job-portal-canary.git'
             }
         }
 
         stage('Build Frontend V1 & V2') {
             steps {
-                echo "🏗️ Building Frontend V1..."
+                echo '🏗️ Building Frontend V1...'
                 dir('frontend-v1') {
                     bat 'npm install'
                     bat 'npm run build'
                 }
 
-                echo "🏗️ Building Frontend V2..."
+                echo '🏗️ Building Frontend V2...'
                 dir('frontend-v2') {
                     bat 'npm install'
                     bat 'npm run build'
@@ -35,7 +35,7 @@ pipeline {
 
         stage('Build Backend') {
             steps {
-                echo "⚙️ Building Backend..."
+                echo '⚙️ Building Backend...'
                 dir('backend') {
                     bat 'npm install'
                 }
@@ -44,69 +44,75 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                echo "🐳 Building Docker Images..."
+                echo '🐳 Building Docker Images...'
                 bat 'docker-compose build'
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                echo "📦 Pushing Docker Images to DockerHub..."
-                bat """
-                    docker login -u %DOCKERHUB_USER% -p %DOCKERHUB_PASS%
-                    docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
-                    docker tag job-portal-canary-pipeline-web_v2:latest %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
-                    docker tag job-portal-canary-pipeline-backend:latest %DOCKERHUB_USER%/job-portal-canary-backend:latest
-                    docker push %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
-                    docker push %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
-                    docker push %DOCKERHUB_USER%/job-portal-canary-backend:latest
-                """
+                echo '📦 Pushing Docker Images to DockerHub...'
+                bat '''
+                docker login -u %DOCKERHUB_USER% -p %DOCKERHUB_PASS%
+                docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
+                docker tag job-portal-canary-pipeline-web_v2:latest %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
+                docker tag job-portal-canary-pipeline-backend:latest %DOCKERHUB_USER%/job-portal-canary-backend:latest
+                docker push %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
+                docker push %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
+                docker push %DOCKERHUB_USER%/job-portal-canary-backend:latest
+                '''
             }
         }
 
         stage('Test EC2 Connection') {
             steps {
-                echo "🔌 Testing EC2 SSH connectivity (auto-accepting host key)..."
+                echo '🔌 Testing EC2 SSH connectivity (auto-accepting host key)...'
                 bat """
-                    echo y | plink -batch -i "%PEM_PATH%" ubuntu@%EC2_IP% "echo ✅ SSH connection successful!"
+                echo y | plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
                 """
             }
         }
 
         stage('Deploy Canary (V2) to EC2') {
             steps {
-                echo "🚀 Deploying Canary (V2) to EC2..."
+                echo '🚀 Deploying Canary (V2) to EC2...'
                 bat """
-                    echo y | plink -batch -i "%PEM_PATH%" ubuntu@%EC2_IP% "docker pull %DOCKERHUB_USER%/job-portal-canary-web_v2:latest && docker pull %DOCKERHUB_USER%/job-portal-canary-backend:latest"
-                    echo y | plink -batch -i "%PEM_PATH%" ubuntu@%EC2_IP% "docker-compose -f /home/ubuntu/docker-compose.yml up -d"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} ^
+                "docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest &&
+                 docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest &&
+                 docker-compose -f /home/ubuntu/docker-compose.yml up -d"
                 """
             }
         }
 
         stage('Traffic Split 90/10') {
             steps {
-                echo "🔀 Shifting traffic 90/10 (V1→V2)..."
-                 bat '''
-plink -batch -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk" ubuntu@52.54.181.179 ^
-"sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_90_10.conf && docker restart nginx_lb"
-'''
+                echo '🔀 Shifting traffic 90/10 (V1→V2)...'
+                bat """
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} ^
+                "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf &&
+                 docker restart nginx_lb"
+                """
             }
         }
 
         stage('Promote Canary to 100%') {
             steps {
-                echo "🚦 Promoting Canary (V2) to 100%..."
+                echo '🚀 Promoting Canary (V2 → 100%)...'
                 bat """
-                    echo y | plink -batch -i "%PEM_PATH%" ubuntu@%EC2_IP% "sudo cp /home/ubuntu/nginx_full_v2.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} ^
+                "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf &&
+                 docker restart nginx_lb"
                 """
             }
         }
 
         stage('Clean Up Old V1') {
             steps {
-                echo "🧹 Removing Old V1 Containers..."
+                echo '🧹 Cleaning up old version (V1)...'
                 bat """
-                    echo y | plink -batch -i "%PEM_PATH%" ubuntu@%EC2_IP% "docker rm -f web_v1 || true"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} ^
+                "docker stop web_v1 && docker rm web_v1"
                 """
             }
         }
@@ -114,17 +120,10 @@ plink -batch -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk" u
 
     post {
         success {
-            echo "✅ Canary Deployment Successful!"
+            echo '✅ Deployment Successful! Canary fully promoted to production.'
         }
         failure {
-            echo "❌ Deployment Failed — Check Jenkins Logs!"
+            echo '❌ Deployment Failed — Check Jenkins Logs!'
         }
     }
 }
-
-
-
-
-
-
-
