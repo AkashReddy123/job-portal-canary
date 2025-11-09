@@ -54,7 +54,7 @@ pipeline {
                 echo '📦 Pushing Docker Images to DockerHub...'
                 bat """
                 echo Logging in to DockerHub...
-                docker login -u %DOCKERHUB_USER% -p %DOCKERHUB_PASS%
+                echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
 
                 echo Tagging images...
                 docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
@@ -74,6 +74,16 @@ pipeline {
                 echo '🔌 Testing EC2 SSH connectivity...'
                 bat """
                 echo y | plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
+                """
+            }
+        }
+
+        stage('Sync Nginx Canary Configs') {
+            steps {
+                echo '🗂️ Syncing nginx canary confs to EC2...'
+                bat """
+                pscp -batch -i "${PPK_PATH}" nginx_90_10.conf ubuntu@${EC2_IP}:/home/ubuntu/nginx_90_10.conf
+                pscp -batch -i "${PPK_PATH}" nginx_100.conf ubuntu@${EC2_IP}:/home/ubuntu/nginx_100.conf
                 """
             }
         }
