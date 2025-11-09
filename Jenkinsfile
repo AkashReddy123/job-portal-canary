@@ -13,14 +13,14 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                echo '📥 Checking out latest project code...'
+                echo '📥 Checking out latest code...'
                 git branch: 'main', url: "${GIT_URL}"
             }
         }
 
-        stage('Build & Test Frontend (V1 & V2)') {
+        stage('Build Frontend (V1 & V2)') {
             steps {
-                echo '🏗️ Building frontend-v1 and frontend-v2...'
+                echo '🏗️ Building frontend versions...'
                 dir('frontend-v1') {
                     bat 'npm install'
                     bat 'npm run build'
@@ -32,7 +32,7 @@ pipeline {
             }
         }
 
-        stage('Build & Test Backend') {
+        stage('Build Backend') {
             steps {
                 echo '⚙️ Installing backend dependencies...'
                 dir('backend') {
@@ -43,7 +43,7 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                echo '🐳 Building Docker images via Compose...'
+                echo '🐳 Building Docker images...'
                 bat 'docker compose build'
             }
         }
@@ -64,11 +64,9 @@ pipeline {
             }
         }
 
-        
-
         stage('Deploy on EC2') {
             steps {
-                echo '🚀 Deploying latest Docker images to EC2...'
+                echo '🚀 Deploying latest images on EC2...'
                 script {
                     def deployCmd = '''
                         cd /home/ubuntu &&
@@ -85,53 +83,14 @@ pipeline {
                 }
             }
         }
-
-        stage('Traffic Split 90/10 Canary') {
-            steps {
-                echo '🌈 Switching traffic to 90/10 split for canary testing...'
-                script {
-                    bat """
-                        echo off
-                        echo y | plink -ssh -i "${PPK_PATH}" ubuntu@${EC2_IP} exit >NUL 2>&1
-                        plink -ssh -batch -no-antispoof -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_90_10.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
-                    """
-                }
-            }
-        }
-
-        stage('Promote Canary to 100%') {
-            steps {
-                echo '🎯 Promoting Canary version to 100% traffic...'
-                script {
-                    bat """
-                        echo off
-                        echo y | plink -ssh -i "${PPK_PATH}" ubuntu@${EC2_IP} exit >NUL 2>&1
-                        plink -ssh -batch -no-antispoof -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_100.conf /etc/nginx/nginx.conf && sudo systemctl reload nginx"
-                    """
-                }
-            }
-        }
-
-        stage('Cleanup Old Containers') {
-            steps {
-                echo '🧹 Cleaning up old containers and images...'
-                script {
-                    bat """
-                        echo off
-                        echo y | plink -ssh -i "${PPK_PATH}" ubuntu@${EC2_IP} exit >NUL 2>&1
-                        plink -ssh -batch -no-antispoof -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker system prune -af"
-                    """
-                }
-            }
-        }
     }
 
     post {
         success {
-            echo '✅ Canary Deployment Completed Successfully!'
+            echo '✅ Deployment completed successfully!'
         }
         failure {
-            echo '❌ Deployment failed — Check Jenkins logs for details.'
+            echo '❌ Deployment failed — check Jenkins logs.'
         }
     }
 }
