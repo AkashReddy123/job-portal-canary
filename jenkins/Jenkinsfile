@@ -52,15 +52,20 @@ pipeline {
         stage('Push to DockerHub') {
             steps {
                 echo '📦 Pushing Docker Images to DockerHub...'
-                bat '''
+                bat """
+                echo Logging in to DockerHub...
                 docker login -u %DOCKERHUB_USER% -p %DOCKERHUB_PASS%
+
+                echo Tagging images...
                 docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
                 docker tag job-portal-canary-pipeline-web_v2:latest %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
                 docker tag job-portal-canary-pipeline-backend:latest %DOCKERHUB_USER%/job-portal-canary-backend:latest
+
+                echo Pushing images...
                 docker push %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
                 docker push %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
                 docker push %DOCKERHUB_USER%/job-portal-canary-backend:latest
-                '''
+                """
             }
         }
 
@@ -73,12 +78,13 @@ pipeline {
             }
         }
 
-        stage('Deploy Canary (V2) to EC2') {
+        stage('Deploy to EC2') {
             steps {
-                echo '🚀 Deploying Canary (V2) to EC2...'
+                echo '🚀 Deploying updated containers to EC2...'
                 bat """
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} ^
-                "docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest &&
+                "docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v1:latest &&
+                 docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest &&
                  docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest &&
                  docker-compose -f /home/ubuntu/docker-compose.yml up -d"
                 """
