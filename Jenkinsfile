@@ -54,7 +54,7 @@ pipeline {
                 echo '📦 Pushing Docker Images to DockerHub...'
                 bat """
                 echo Logging in to DockerHub...
-                echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin || exit /b 1
 
                 echo Tagging images...
                 docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
@@ -78,7 +78,18 @@ pipeline {
             }
         }
 
-      
+        stage('Sync Nginx Configs to EC2') {
+            steps {
+                echo '🗂️ Syncing nginx canary configs to EC2...'
+                bat """
+                pscp -batch -i "${PPK_PATH}" nginx_90_10.conf ubuntu@${EC2_IP}:/home/ubuntu/nginx_90_10.conf
+                pscp -batch -i "${PPK_PATH}" nginx_100.conf ubuntu@${EC2_IP}:/home/ubuntu/nginx_100.conf
+
+                echo --- Setting default active config to 100% (stable) ---
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf"
+                """
+            }
+        }
 
         stage('Deploy to EC2') {
             steps {
@@ -93,8 +104,12 @@ pipeline {
                 echo --- Pulling Backend ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest"
 
-                echo --- Running docker-compose up ---
+                echo --- Starting services ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker-compose -f /home/ubuntu/docker-compose.yml up -d"
+
+                echo --- Restarting nginx_lb ---
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker rm -f nginx_lb || true"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker run -d --name nginx_lb --network ubuntu_jobportal-net -p 80:80 -v /home/ubuntu/nginx_active.conf:/etc/nginx/nginx.conf:ro nginx:alpine"
                 """
             }
         }
@@ -106,6 +121,7 @@ pipeline {
                 echo --- Applying 90/10 traffic split config ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf"
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker restart nginx_lb"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker ps"
                 """
             }
         }
@@ -117,6 +133,16 @@ pipeline {
                 echo --- Switching to 100% traffic for V2 ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf"
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker restart nginx_lb"
+                """
+            }
+        }
+
+        stage('Validate Deployment') {
+            steps {
+                echo '🔍 Validating EC2 deployment health...'
+                bat """
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker ps"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "curl -I localhost"
                 """
             }
         }
