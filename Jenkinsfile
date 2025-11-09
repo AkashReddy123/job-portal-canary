@@ -4,8 +4,8 @@ pipeline {
     environment {
         DOCKERHUB_USER = 'balaakashreddyy'
         DOCKERHUB_PASS = credentials('dockerhub-login') // Jenkins credential ID
-        EC2_IP = '52.54.181.179'
-        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk'
+        EC2_IP = '54.164.196.3'
+        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk'
     }
 
     stages {
@@ -69,6 +69,15 @@ pipeline {
             }
         }
 
+        stage('Test EC2 Connection') {
+            steps {
+                echo '🔌 Testing EC2 SSH connectivity...'
+                bat """
+                echo y | plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
+                """
+            }
+        }
+
         stage('Deploy to EC2') {
             steps {
                 echo '🚀 Pulling latest images and deploying on EC2...'
@@ -90,7 +99,7 @@ pipeline {
 
         stage('Traffic Split 90/10') {
             steps {
-                echo '🔀 Shifting traffic 90/10 (V1→V2)...'
+                echo '🔀 Shifting traffic 90/10 (V1 → V2)...'
                 bat """
                 echo --- Applying 90/10 traffic split config ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf"
