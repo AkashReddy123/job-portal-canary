@@ -80,10 +80,15 @@ pipeline {
 
         stage('Sync Nginx Canary Configs') {
             steps {
-                echo '🗂️ Syncing nginx canary confs to EC2...'
+                echo '🗂️ Syncing nginx canary configs to EC2...'
                 bat """
-                pscp -batch -i "${PPK_PATH}" nginx_90_10.conf ubuntu@${EC2_IP}:/home/ubuntu/nginx_90_10.conf
-                pscp -batch -i "${PPK_PATH}" nginx_100.conf ubuntu@${EC2_IP}:/home/ubuntu/nginx_100.conf
+                echo --- Uploading configs to EC2 temp folder ---
+                pscp -batch -i "${PPK_PATH}" nginx_90_10.conf ubuntu@${EC2_IP}:/tmp/nginx_90_10.conf
+                pscp -batch -i "${PPK_PATH}" nginx_100.conf ubuntu@${EC2_IP}:/tmp/nginx_100.conf
+                echo --- Moving configs to /home/ubuntu with sudo ---
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo mv /tmp/nginx_90_10.conf /home/ubuntu/nginx_90_10.conf"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo mv /tmp/nginx_100.conf /home/ubuntu/nginx_100.conf"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo chown ubuntu:ubuntu /home/ubuntu/nginx_*.conf"
                 """
             }
         }
