@@ -14,7 +14,7 @@ pipeline {
 
     stages {
 
-        // 🧾 Stage 1: Checkout Source Code
+        // 🧾 Stage 1: Checkout Code
         stage('Checkout Code') {
             steps {
                 echo '📥 Checking out latest project code...'
@@ -74,23 +74,39 @@ pipeline {
             }
         }
 
-        // ⚙️ Stage 6: Prepare EC2
+        // ⚙️ Stage 6: Prepare EC2 Environment
         stage('Prepare EC2 Environment') {
             steps {
                 echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
                 script {
                     def remoteCmd = '''
+                        # 🧹 Clean existing Docker installation
+                        sudo apt remove -y docker docker-engine docker.io containerd runc || true &&
                         sudo apt update -y &&
-                        sudo apt install -y docker.io git &&
+                        sudo apt install -y ca-certificates curl gnupg lsb-release git &&
+                        sudo mkdir -p /etc/apt/keyrings &&
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg &&
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+                        https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+                        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null &&
+                        sudo apt update -y &&
+                        sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git &&
                         sudo systemctl enable docker &&
                         sudo systemctl start docker &&
+
+                        # 📂 Clone and prepare project
                         if [ ! -d /home/ubuntu/job-portal-canary ]; then
                             git clone https://github.com/AkashReddy123/job-portal-canary.git /home/ubuntu/job-portal-canary;
+                        else
+                            cd /home/ubuntu/job-portal-canary && git pull;
                         fi &&
+
                         sudo cp -r /home/ubuntu/job-portal-canary/{frontend-v1,frontend-v2,backend,nginx} /home/ubuntu/ &&
                         sudo cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
                         sudo cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
                         sudo cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
+
+                        # 🌿 Create .env for backend
                         if [ ! -f /home/ubuntu/backend/.env ]; then
                             echo "PORT=5000" > /home/ubuntu/backend/.env &&
                             echo "MONGO_URI=mongodb://mongo:27017/jobportal" >> /home/ubuntu/backend/.env &&
@@ -104,7 +120,7 @@ pipeline {
             }
         }
 
-        // 🚀 Stage 7: Deploy
+        // 🚀 Stage 7: Deploy Application
         stage('Deploy on EC2') {
             steps {
                 echo '🚀 Deploying latest images via Docker Compose...'
@@ -113,7 +129,7 @@ pipeline {
                         docker pull balaakashreddyy/job-portal-canary-web_v1:latest &&
                         docker pull balaakashreddyy/job-portal-canary-web_v2:latest &&
                         docker pull balaakashreddyy/job-portal-canary-backend:latest &&
-                        docker compose -f /home/ubuntu/docker-compose.yml up -d
+                        cd /home/ubuntu && docker compose up -d --build
                     '''.replaceAll("\\r?\\n", " ").trim()
 
                     bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
@@ -121,7 +137,7 @@ pipeline {
             }
         }
 
-        // 🔀 Stage 8: Traffic Split 90/10
+        // 🔀 Stage 8: 90/10 Canary Split
         stage('Traffic Split 90/10 Canary') {
             steps {
                 echo '🔀 Applying 90/10 traffic split (V1→V2)...'
@@ -132,7 +148,7 @@ pipeline {
             }
         }
 
-        // 🔥 Stage 9: Promote Canary
+        // 🔥 Stage 9: Promote to 100%
         stage('Promote Canary to 100%') {
             steps {
                 echo '🔥 Promoting Canary (V2 → 100%)...'
@@ -146,7 +162,7 @@ pipeline {
         // 🧹 Stage 10: Cleanup
         stage('Cleanup Old Containers') {
             steps {
-                echo '🧹 Removing old containers...'
+                echo '🧹 Cleaning up old containers and images...'
                 script {
                     def remoteCmd = "docker stop web_v1 || true && docker rm web_v1 || true && docker image prune -af"
                     bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
