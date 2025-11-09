@@ -8,6 +8,7 @@ pipeline {
         PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk'
         GIT_URL = 'https://github.com/AkashReddy123/job-portal-canary.git'
         GIT_BRANCH = 'main'
+        HOST_KEY = 'ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs'
     }
 
     stages {
@@ -67,41 +68,41 @@ pipeline {
             }
         }
 
-       stage('Prepare EC2 Environment') {
-           steps {
-               echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
-               bat """
-               plink -batch -i "${PPK_PATH}" -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ubuntu@${EC2_IP} "
-               sudo apt update -y &&
-               sudo apt install -y docker.io git &&
-               sudo systemctl enable docker &&
-               sudo systemctl start docker &&
-               if [ ! -d /home/ubuntu/job-portal-canary ]; then
-                 git clone ${GIT_URL} /home/ubuntu/job-portal-canary
-               fi &&
-               cp -r /home/ubuntu/job-portal-canary/frontend-v1 /home/ubuntu/ &&
-               cp -r /home/ubuntu/job-portal-canary/frontend-v2 /home/ubuntu/ &&
-               cp -r /home/ubuntu/job-portal-canary/backend /home/ubuntu/ &&
-               cp -r /home/ubuntu/job-portal-canary/nginx /home/ubuntu/ &&
-               cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
-               cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
-               cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
-               if [ ! -f /home/ubuntu/backend/.env ]; then
-                   echo 'PORT=5000' > /home/ubuntu/backend/.env &&
-                   echo 'MONGO_URI=mongodb://mongo:27017/jobportal' >> /home/ubuntu/backend/.env &&
-                   echo 'JWT_SECRET=supersecretkey' >> /home/ubuntu/backend/.env &&
-                   echo 'NODE_ENV=production' >> /home/ubuntu/backend/.env
-                   fi
-                   "
-               """
-           }
-       }
+        stage('Prepare EC2 Environment') {
+            steps {
+                echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
+                bat """
+                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "
+                    sudo apt update -y &&
+                    sudo apt install -y docker.io git &&
+                    sudo systemctl enable docker &&
+                    sudo systemctl start docker &&
+                    if [ ! -d /home/ubuntu/job-portal-canary ]; then
+                        git clone ${GIT_URL} /home/ubuntu/job-portal-canary;
+                    fi &&
+                    cp -r /home/ubuntu/job-portal-canary/frontend-v1 /home/ubuntu/ &&
+                    cp -r /home/ubuntu/job-portal-canary/frontend-v2 /home/ubuntu/ &&
+                    cp -r /home/ubuntu/job-portal-canary/backend /home/ubuntu/ &&
+                    cp -r /home/ubuntu/job-portal-canary/nginx /home/ubuntu/ &&
+                    cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
+                    cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
+                    cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
+                    if [ ! -f /home/ubuntu/backend/.env ]; then
+                        echo 'PORT=5000' > /home/ubuntu/backend/.env &&
+                        echo 'MONGO_URI=mongodb://mongo:27017/jobportal' >> /home/ubuntu/backend/.env &&
+                        echo 'JWT_SECRET=supersecretkey' >> /home/ubuntu/backend/.env &&
+                        echo 'NODE_ENV=production' >> /home/ubuntu/backend/.env;
+                    fi
+                "
+                """
+            }
+        }
 
         stage('Deploy on EC2') {
             steps {
                 echo '🚀 Deploying latest images via Docker Compose...'
                 bat """
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
+                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "
                     docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v1:latest &&
                     docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest &&
                     docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest &&
@@ -115,7 +116,7 @@ pipeline {
             steps {
                 echo '🔀 Applying 90/10 traffic split (V1→V2)...'
                 bat """
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
+                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "
                     sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf &&
                     docker restart nginx_lb
                 "
@@ -127,7 +128,7 @@ pipeline {
             steps {
                 echo '🔥 Promoting Canary (V2 → 100%)...'
                 bat """
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
+                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "
                     sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf &&
                     docker restart nginx_lb
                 "
@@ -139,7 +140,7 @@ pipeline {
             steps {
                 echo '🧹 Removing old containers...'
                 bat """
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
+                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "
                     docker stop web_v1 || true &&
                     docker rm web_v1 || true &&
                     docker image prune -af
@@ -151,7 +152,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Canary deployment successful!'
+            echo '✅ Canary deployment successful! 🎉'
         }
         failure {
             echo '❌ Deployment failed — Check Jenkins logs for details.'
