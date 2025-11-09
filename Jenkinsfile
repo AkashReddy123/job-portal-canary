@@ -69,15 +69,6 @@ pipeline {
             }
         }
 
-        stage('Test EC2 Connection') {
-            steps {
-                echo '🔌 Testing EC2 SSH connectivity...'
-                bat """
-                echo y | plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
-                """
-            }
-        }
-
         stage('Deploy to EC2') {
             steps {
                 echo '🚀 Pulling latest images and deploying on EC2...'
