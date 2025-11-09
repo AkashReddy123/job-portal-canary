@@ -87,7 +87,7 @@ pipeline {
             steps {
                 echo "🔀 Shifting traffic 90/10 (V1→V2)..."
                 bat """
-                    echo y | plink -batch -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk" ubuntu@52.54.181.179 "docker cp /home/ubuntu/nginx_90_10.conf nginx_lb:/etc/nginx/nginx.conf && docker exec nginx_lb nginx -s reload"
+                    echo y | plink -batch -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk" ubuntu@52.54.181.179 "docker cp /home/ubuntu/nginx_90_10.conf nginx_lb:/etc/nginx/nginx_temp.conf && docker exec nginx_lb mv /etc/nginx/nginx_temp.conf /etc/nginx/nginx.conf && docker exec nginx_lb nginx -s reload"
                 """
             }
         }
@@ -120,4 +120,5 @@ pipeline {
         }
     }
 }
+
 
