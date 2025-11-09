@@ -64,49 +64,7 @@ pipeline {
             }
         }
 
-        stage('Prepare EC2 Environment') {
-            steps {
-                echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
-                script {
-                    def remoteCmd = '''
-                        sudo apt remove -y docker docker-engine docker.io containerd runc || true &&
-                        sudo apt update -y &&
-                        sudo apt install -y ca-certificates curl gnupg lsb-release git &&
-                        sudo mkdir -p /etc/apt/keyrings &&
-                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg &&
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-                        https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
-                        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null &&
-                        sudo apt update -y &&
-                        sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git &&
-                        sudo systemctl enable docker &&
-                        sudo systemctl start docker &&
-                        if [ ! -d /home/ubuntu/job-portal-canary ]; then
-                            git clone https://github.com/AkashReddy123/job-portal-canary.git /home/ubuntu/job-portal-canary;
-                        else
-                            cd /home/ubuntu/job-portal-canary && git pull;
-                        fi &&
-                        sudo cp -r /home/ubuntu/job-portal-canary/{frontend-v1,frontend-v2,backend,nginx} /home/ubuntu/ &&
-                        sudo cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
-                        sudo cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
-                        sudo cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
-                        if [ ! -f /home/ubuntu/backend/.env ]; then
-                            echo "PORT=5000" > /home/ubuntu/backend/.env &&
-                            echo "MONGO_URI=mongodb://mongo:27017/jobportal" >> /home/ubuntu/backend/.env &&
-                            echo "JWT_SECRET=supersecretkey" >> /home/ubuntu/backend/.env &&
-                            echo "NODE_ENV=production" >> /home/ubuntu/backend/.env;
-                        fi
-                    '''.replaceAll("\\r?\\n", " ").trim()
-
-                    bat """
-                        echo off
-                        REM 🧠 Pre-cache EC2 host key to avoid batch prompt
-                        echo y | plink -ssh -i "${PPK_PATH}" ubuntu@${EC2_IP} exit >NUL 2>&1
-                        plink -ssh -batch -no-antispoof -i "${PPK_PATH}" ubuntu@${EC2_IP} "${remoteCmd}"
-                    """
-                }
-            }
-        }
+        
 
         stage('Deploy on EC2') {
             steps {
