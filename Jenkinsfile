@@ -71,9 +71,12 @@ pipeline {
 
         stage('Test EC2 Connection') {
             steps {
-                echo '🔌 Testing EC2 SSH connectivity...'
+                 echo '🔌 Testing EC2 SSH connectivity...'
                 bat """
-                echo y | -batch -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
+                "C:\\Program Files\\PuTTY\\plink.exe" -ssh -P 22 -batch -no-antispoof ^
+                -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ^
+                -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk" ^
+                ubuntu@54.164.196.3 "echo ✅ SSH connection successful!"
                 """
             }
         }
