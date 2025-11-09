@@ -1,6 +1,6 @@
 {
   "name": "frontend-v1",
-  "homepage": "/v2",
+  "homepage": "/",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
