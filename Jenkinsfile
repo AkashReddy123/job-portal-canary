@@ -111,7 +111,8 @@ pipeline {
                         fi
                     '''.replaceAll("\\r?\\n", " ").trim()
 
-                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    // 🚫 Disable host key checking entirely
+                    bat "echo y | plink -ssh -batch -no-antispoof -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -128,7 +129,7 @@ pipeline {
                         cd /home/ubuntu && docker compose up -d --build
                     '''.replaceAll("\\r?\\n", " ").trim()
 
-                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "echo y | plink -ssh -batch -no-antispoof -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -139,7 +140,7 @@ pipeline {
                 echo '🔀 Applying 90/10 traffic split (V1→V2)...'
                 script {
                     def remoteCmd = "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
-                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "echo y | plink -ssh -batch -no-antispoof -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -150,7 +151,7 @@ pipeline {
                 echo '🔥 Promoting Canary (V2 → 100%)...'
                 script {
                     def remoteCmd = "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
-                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "echo y | plink -ssh -batch -no-antispoof -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -161,7 +162,7 @@ pipeline {
                 echo '🧹 Cleaning up old containers and images...'
                 script {
                     def remoteCmd = "docker stop web_v1 || true && docker rm web_v1 || true && docker image prune -af"
-                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "echo y | plink -ssh -batch -no-antispoof -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
