@@ -88,10 +88,8 @@ pipeline {
                 echo "🔀 Shifting traffic 90/10 (V1→V2)..."
                 bat """
                     echo y | plink -batch -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\key-job-portal.ppk" ubuntu@52.54.181.179 "
-                    docker stop nginx_lb &&
-                    sleep 5 &&
-                    docker cp /home/ubuntu/nginx_90_10.conf nginx_lb:/etc/nginx/nginx.conf &&
-                    docker start nginx_lb
+                    sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_90_10.conf &&
+                    docker restart nginx_lb
                     "
                 """
             }
@@ -125,6 +123,7 @@ pipeline {
         }
     }
 }
+
 
 
 
