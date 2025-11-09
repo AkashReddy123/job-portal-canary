@@ -45,7 +45,7 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 echo '🐳 Building Docker Images...'
-                bat 'docker-compose build'
+                bat 'docker compose build'
             }
         }
 
@@ -54,7 +54,7 @@ pipeline {
                 echo '📦 Pushing Docker Images to DockerHub...'
                 bat """
                 echo Logging in to DockerHub...
-                echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin || exit /b 1
 
                 echo Tagging images...
                 docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
@@ -74,6 +74,18 @@ pipeline {
                 echo '🔌 Testing EC2 SSH connectivity...'
                 bat """
                 echo y | plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
+                """
+            }
+        }
+
+        stage('Ensure docker compose plugin on EC2') {
+            steps {
+                echo '🧰 Verifying docker compose plugin on EC2...'
+                bat """
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "if ! docker compose version >/dev/null 2>&1; then
+                  echo '⚙️ Installing docker compose plugin...'
+                  sudo apt update -y && sudo apt install docker-compose-plugin -y
+                fi"
                 """
             }
         }
@@ -101,15 +113,15 @@ pipeline {
                 echo --- Pulling Backend ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest"
 
-                echo --- Running docker-compose up ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker-compose -f /home/ubuntu/docker-compose.yml up -d"
+                echo --- Running docker compose up ---
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker compose -f /home/ubuntu/docker-compose.yml up -d"
                 """
             }
         }
 
         stage('Traffic Split 90/10') {
             steps {
-                echo '🔀 Shifting traffic 90/10 (V1→V2)...'
+                echo '🔀 Shifting traffic 90/10 (V1 → V2)...'
                 bat """
                 echo --- Applying 90/10 traffic split config ---
                 plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf"
@@ -134,8 +146,8 @@ pipeline {
                 echo '🧹 Cleaning up old version (V1)...'
                 bat """
                 echo --- Stopping and removing old container ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker stop web_v1"
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker rm web_v1"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker stop web_v1 || true"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker rm web_v1 || true"
                 """
             }
         }
