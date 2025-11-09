@@ -78,6 +78,27 @@ pipeline {
             }
         }
 
+        // 🔧 NEW STAGE: Auto-install Docker Compose if missing
+        stage('Ensure docker compose plugin on EC2') {
+            steps {
+                echo '🧩 Ensuring Docker Compose is installed on EC2...'
+                bat """
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
+                if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1; then
+                    echo 'Installing Docker & Docker Compose...';
+                    sudo apt update -y;
+                    sudo apt install docker.io curl -y;
+                    sudo curl -L 'https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-\$(uname -s)-\$(uname -m)' -o /usr/local/bin/docker-compose;
+                    sudo chmod +x /usr/local/bin/docker-compose;
+                    docker-compose version;
+                else
+                    echo '✅ Docker Compose already installed.';
+                fi
+                "
+                """
+            }
+        }
+
         stage('Sync Nginx Canary Configs') {
             steps {
                 echo '🗂️ Syncing nginx canary confs to EC2...'
@@ -134,8 +155,8 @@ pipeline {
                 echo '🧹 Cleaning up old version (V1)...'
                 bat """
                 echo --- Stopping and removing old container ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker stop web_v1"
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker rm web_v1"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker stop web_v1 || true"
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker rm web_v1 || true"
                 """
             }
         }
