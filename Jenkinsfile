@@ -83,18 +83,16 @@ pipeline {
             steps {
                 echo '🧩 Ensuring Docker Compose is installed on EC2...'
                 bat """
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
-                if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1; then
-                    echo 'Installing Docker & Docker Compose...';
-                    sudo apt update -y;
-                    sudo apt install docker.io curl -y;
-                    sudo curl -L 'https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-\$(uname -s)-\$(uname -m)' -o /usr/local/bin/docker-compose;
-                    sudo chmod +x /usr/local/bin/docker-compose;
-                    docker-compose version;
+                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "bash -c 'if ! command -v docker-compose >/dev/null 2>&1 && ! docker compose version >/dev/null 2>&1; then
+                echo Installing Docker & Docker Compose...;
+                sudo apt update -y;
+                sudo apt install docker.io curl -y;
+                sudo curl -L https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-\$(uname -s)-\$(uname -m) -o /usr/local/bin/docker-compose;
+                sudo chmod +x /usr/local/bin/docker-compose;
+                docker-compose version;
                 else
-                    echo '✅ Docker Compose already installed.';
-                fi
-                "
+                echo Docker Compose already installed!;
+                fi'"
                 """
             }
         }
