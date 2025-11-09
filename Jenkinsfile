@@ -71,73 +71,82 @@ pipeline {
         stage('Prepare EC2 Environment') {
             steps {
                 echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
+                script {
+                    def remoteCmd = """
+                        sudo apt update -y &&
+                        sudo apt install -y docker.io git &&
+                        sudo systemctl enable docker &&
+                        sudo systemctl start docker &&
+                        if [ ! -d /home/ubuntu/job-portal-canary ]; then
+                            git clone ${GIT_URL} /home/ubuntu/job-portal-canary;
+                        fi &&
+                        cp -r /home/ubuntu/job-portal-canary/frontend-v1 /home/ubuntu/ &&
+                        cp -r /home/ubuntu/job-portal-canary/frontend-v2 /home/ubuntu/ &&
+                        cp -r /home/ubuntu/job-portal-canary/backend /home/ubuntu/ &&
+                        cp -r /home/ubuntu/job-portal-canary/nginx /home/ubuntu/ &&
+                        cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
+                        cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
+                        cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
+                        if [ ! -f /home/ubuntu/backend/.env ]; then
+                            echo 'PORT=5000' > /home/ubuntu/backend/.env &&
+                            echo 'MONGO_URI=mongodb://mongo:27017/jobportal' >> /home/ubuntu/backend/.env &&
+                            echo 'JWT_SECRET=supersecretkey' >> /home/ubuntu/backend/.env &&
+                            echo 'NODE_ENV=production' >> /home/ubuntu/backend/.env;
+                        fi
+                    """.trim()
 
-                def remoteCmd = """
-                    sudo apt update -y &&
-                    sudo apt install -y docker.io git &&
-                    sudo systemctl enable docker &&
-                    sudo systemctl start docker &&
-                    if [ ! -d /home/ubuntu/job-portal-canary ]; then
-                        git clone ${GIT_URL} /home/ubuntu/job-portal-canary;
-                    fi &&
-                    cp -r /home/ubuntu/job-portal-canary/frontend-v1 /home/ubuntu/ &&
-                    cp -r /home/ubuntu/job-portal-canary/frontend-v2 /home/ubuntu/ &&
-                    cp -r /home/ubuntu/job-portal-canary/backend /home/ubuntu/ &&
-                    cp -r /home/ubuntu/job-portal-canary/nginx /home/ubuntu/ &&
-                    cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
-                    cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
-                    cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
-                    if [ ! -f /home/ubuntu/backend/.env ]; then
-                        echo 'PORT=5000' > /home/ubuntu/backend/.env &&
-                        echo 'MONGO_URI=mongodb://mongo:27017/jobportal' >> /home/ubuntu/backend/.env &&
-                        echo 'JWT_SECRET=supersecretkey' >> /home/ubuntu/backend/.env &&
-                        echo 'NODE_ENV=production' >> /home/ubuntu/backend/.env;
-                    fi
-                """.trim()
-
-                bat """
-                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}"
-                """
+                    bat """
+                    plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}"
+                    """
+                }
             }
         }
 
         stage('Deploy on EC2') {
             steps {
                 echo '🚀 Deploying latest images via Docker Compose...'
-                def remoteCmd = """
-                    docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v1:latest &&
-                    docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest &&
-                    docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest &&
-                    docker compose -f /home/ubuntu/docker-compose.yml up -d
-                """.trim()
+                script {
+                    def remoteCmd = """
+                        docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v1:latest &&
+                        docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest &&
+                        docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest &&
+                        docker compose -f /home/ubuntu/docker-compose.yml up -d
+                    """.trim()
 
-                bat """
-                plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}"
-                """
+                    bat """
+                    plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}"
+                    """
+                }
             }
         }
 
         stage('Traffic Split 90/10 Canary') {
             steps {
                 echo '🔀 Applying 90/10 traffic split (V1→V2)...'
-                def remoteCmd = "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
-                bat """plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}" """
+                script {
+                    def remoteCmd = "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
+                    bat """plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}" """
+                }
             }
         }
 
         stage('Promote Canary to 100%') {
             steps {
                 echo '🔥 Promoting Canary (V2 → 100%)...'
-                def remoteCmd = "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
-                bat """plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}" """
+                script {
+                    def remoteCmd = "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
+                    bat """plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}" """
+                }
             }
         }
 
         stage('Cleanup Old Containers') {
             steps {
                 echo '🧹 Removing old containers...'
-                def remoteCmd = "docker stop web_v1 || true && docker rm web_v1 || true && docker image prune -af"
-                bat """plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}" """
+                script {
+                    def remoteCmd = "docker stop web_v1 || true && docker rm web_v1 || true && docker image prune -af"
+                    bat """plink -batch -i "${PPK_PATH}" -hostkey "${HOST_KEY}" ubuntu@${EC2_IP} "${remoteCmd}" """
+                }
             }
         }
     }
