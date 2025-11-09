@@ -73,7 +73,7 @@ pipeline {
             steps {
                 echo '🔌 Testing EC2 SSH connectivity...'
                 bat """
-                echo y | plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
+                echo y | -batch -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" -i "${PPK_PATH}" ubuntu@${EC2_IP} "echo ✅ SSH connection successful!"
                 """
             }
         }
