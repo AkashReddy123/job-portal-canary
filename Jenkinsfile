@@ -67,35 +67,35 @@ pipeline {
             }
         }
 
-        stage('Prepare EC2 Environment') {
-            steps {
-                echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
-                bat """
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "
-                    sudo apt update -y &&
-                    sudo apt install -y docker.io git &&
-                    sudo systemctl enable docker &&
-                    sudo systemctl start docker &&
-                    if [ ! -d /home/ubuntu/job-portal-canary ]; then
-                        git clone ${GIT_URL} /home/ubuntu/job-portal-canary
-                    fi &&
-                    cp -r /home/ubuntu/job-portal-canary/frontend-v1 /home/ubuntu/ &&
-                    cp -r /home/ubuntu/job-portal-canary/frontend-v2 /home/ubuntu/ &&
-                    cp -r /home/ubuntu/job-portal-canary/backend /home/ubuntu/ &&
-                    cp -r /home/ubuntu/job-portal-canary/nginx /home/ubuntu/ &&
-                    cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
-                    cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
-                    cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
-                    if [ ! -f /home/ubuntu/backend/.env ]; then
-                        echo 'PORT=5000' > /home/ubuntu/backend/.env &&
-                        echo 'MONGO_URI=mongodb://mongo:27017/jobportal' >> /home/ubuntu/backend/.env &&
-                        echo 'JWT_SECRET=supersecretkey' >> /home/ubuntu/backend/.env &&
-                        echo 'NODE_ENV=production' >> /home/ubuntu/backend/.env
-                    fi
-                "
-                """
-            }
-        }
+       stage('Prepare EC2 Environment') {
+           steps {
+               echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
+               bat """
+               plink -batch -i "${PPK_PATH}" -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ubuntu@${EC2_IP} "
+               sudo apt update -y &&
+               sudo apt install -y docker.io git &&
+               sudo systemctl enable docker &&
+               sudo systemctl start docker &&
+               if [ ! -d /home/ubuntu/job-portal-canary ]; then
+                 git clone ${GIT_URL} /home/ubuntu/job-portal-canary
+               fi &&
+               cp -r /home/ubuntu/job-portal-canary/frontend-v1 /home/ubuntu/ &&
+               cp -r /home/ubuntu/job-portal-canary/frontend-v2 /home/ubuntu/ &&
+               cp -r /home/ubuntu/job-portal-canary/backend /home/ubuntu/ &&
+               cp -r /home/ubuntu/job-portal-canary/nginx /home/ubuntu/ &&
+               cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
+               cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
+               cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
+               if [ ! -f /home/ubuntu/backend/.env ]; then
+                   echo 'PORT=5000' > /home/ubuntu/backend/.env &&
+                   echo 'MONGO_URI=mongodb://mongo:27017/jobportal' >> /home/ubuntu/backend/.env &&
+                   echo 'JWT_SECRET=supersecretkey' >> /home/ubuntu/backend/.env &&
+                   echo 'NODE_ENV=production' >> /home/ubuntu/backend/.env
+                   fi
+                   "
+               """
+           }
+       }
 
         stage('Deploy on EC2') {
             steps {
