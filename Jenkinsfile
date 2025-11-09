@@ -104,7 +104,7 @@ pipeline {
                 "C:\\Program Files\\PuTTY\\plink.exe" -ssh -P 22 -batch -no-antispoof ^
                 -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ^
                 -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk" ^
-                ubuntu@54.164.196.3 "docker-compose -f /home/ubuntu/docker-compose.yml up -d"
+                ubuntu@54.164.196.3 "docker compose -f /home/ubuntu/docker-compose.yml up -d"
                 """
             }
         }
