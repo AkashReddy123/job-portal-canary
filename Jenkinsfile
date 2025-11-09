@@ -86,19 +86,29 @@ pipeline {
                 echo '🚀 Pulling latest images and deploying on EC2...'
                 bat """
                 echo --- Pulling Web V1 ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v1:latest"
-
+                "C:\\Program Files\\PuTTY\\plink.exe" -ssh -P 22 -batch -no-antispoof ^
+                -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ^
+                -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk" ^
+                ubuntu@54.164.196.3 "docker pull balaakashreddyy/job-portal-canary-web_v1:latest"
                 echo --- Pulling Web V2 ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker pull ${DOCKERHUB_USER}/job-portal-canary-web_v2:latest"
-
+                "C:\\Program Files\\PuTTY\\plink.exe" -ssh -P 22 -batch -no-antispoof ^
+                -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ^
+                -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk" ^
+                ubuntu@54.164.196.3 "docker pull balaakashreddyy/job-portal-canary-web_v2:latest"
                 echo --- Pulling Backend ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker pull ${DOCKERHUB_USER}/job-portal-canary-backend:latest"
-
+                "C:\\Program Files\\PuTTY\\plink.exe" -ssh -P 22 -batch -no-antispoof ^
+                -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ^
+                -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk" ^
+                ubuntu@54.164.196.3 "docker pull balaakashreddyy/job-portal-canary-backend:latest"
                 echo --- Running docker-compose up ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "docker-compose -f /home/ubuntu/docker-compose.yml up -d"
+                "C:\\Program Files\\PuTTY\\plink.exe" -ssh -P 22 -batch -no-antispoof ^
+                -hostkey "ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs" ^
+                -i "C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key.ppk" ^
+                ubuntu@54.164.196.3 "docker-compose -f /home/ubuntu/docker-compose.yml up -d"
                 """
             }
         }
+
 
         stage('Traffic Split 90/10') {
             steps {
