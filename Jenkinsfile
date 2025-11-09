@@ -9,7 +9,6 @@ pipeline {
         PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key-2.ppk'
         GIT_URL = 'https://github.com/AkashReddy123/job-portal-canary.git'
         GIT_BRANCH = 'main'
-        HOST_KEY = 'ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs'
     }
 
     stages {
@@ -80,7 +79,6 @@ pipeline {
                 echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
                 script {
                     def remoteCmd = '''
-                        # 🧹 Clean existing Docker installation
                         sudo apt remove -y docker docker-engine docker.io containerd runc || true &&
                         sudo apt update -y &&
                         sudo apt install -y ca-certificates curl gnupg lsb-release git &&
@@ -94,7 +92,6 @@ pipeline {
                         sudo systemctl enable docker &&
                         sudo systemctl start docker &&
 
-                        # 📂 Clone and prepare project
                         if [ ! -d /home/ubuntu/job-portal-canary ]; then
                             git clone https://github.com/AkashReddy123/job-portal-canary.git /home/ubuntu/job-portal-canary;
                         else
@@ -106,7 +103,6 @@ pipeline {
                         sudo cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
                         sudo cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
 
-                        # 🌿 Create .env for backend
                         if [ ! -f /home/ubuntu/backend/.env ]; then
                             echo "PORT=5000" > /home/ubuntu/backend/.env &&
                             echo "MONGO_URI=mongodb://mongo:27017/jobportal" >> /home/ubuntu/backend/.env &&
@@ -115,7 +111,7 @@ pipeline {
                         fi
                     '''.replaceAll("\\r?\\n", " ").trim()
 
-                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -132,7 +128,7 @@ pipeline {
                         cd /home/ubuntu && docker compose up -d --build
                     '''.replaceAll("\\r?\\n", " ").trim()
 
-                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -143,7 +139,7 @@ pipeline {
                 echo '🔀 Applying 90/10 traffic split (V1→V2)...'
                 script {
                     def remoteCmd = "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
-                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -154,7 +150,7 @@ pipeline {
                 echo '🔥 Promoting Canary (V2 → 100%)...'
                 script {
                     def remoteCmd = "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
-                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
@@ -165,7 +161,7 @@ pipeline {
                 echo '🧹 Cleaning up old containers and images...'
                 script {
                     def remoteCmd = "docker stop web_v1 || true && docker rm web_v1 || true && docker image prune -af"
-                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                    bat "plink -batch -no-antispoof -ssh -i \"${PPK_PATH}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
                 }
             }
         }
