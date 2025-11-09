@@ -78,22 +78,6 @@ pipeline {
             }
         }
 
-        stage('Sync Nginx Configs to EC2') {
-            steps {
-                echo '🗂️ Syncing nginx canary configs to EC2...'
-                bat """
-                echo --- Uploading configs to EC2 temporary folder ---
-                pscp -batch -i "${PPK_PATH}" nginx_90_10.conf ubuntu@${EC2_IP}:/tmp/nginx_90_10.conf
-                pscp -batch -i "${PPK_PATH}" nginx_100.conf ubuntu@${EC2_IP}:/tmp/nginx_100.conf
-
-                echo --- Moving configs to /home/ubuntu using sudo ---
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo mv /tmp/nginx_90_10.conf /home/ubuntu/nginx_90_10.conf"
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo mv /tmp/nginx_100.conf /home/ubuntu/nginx_100.conf"
-                plink -batch -i "${PPK_PATH}" ubuntu@${EC2_IP} "sudo chown ubuntu:ubuntu /home/ubuntu/nginx_*.conf"
-                """
-            }
-        }
-
         stage('Deploy to EC2') {
             steps {
                 echo '🚀 Pulling latest images and deploying on EC2...'
