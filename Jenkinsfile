@@ -2,30 +2,217 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "balaakashreddyy"
-        APP_NAME = "job-portal-canary"
+        // 🌍 Environment Variables
+        DOCKERHUB_USER = 'balaakashreddyy'
+        DOCKERHUB_PASS = credentials('dockerhub-login')  // Jenkins Credentials ID (DockerHub)
+        EC2_IP = '3.81.200.219'
+        PPK_PATH = 'C:\\"C:\\Users\\Y BALA AKASH REDDY\\Downloads\\bigkey.ppk"'
+        GIT_URL = 'https://github.com/AkashReddy123/job-portal-canary.git'
+        GIT_BRANCH = 'main'
+        HOST_KEY = 'ssh-ed25519 255 SHA256:KHfANlDuaxmI4YaMKAV8GiqUu3aMemtu0xSArO/mnKs'
+    }
+
+    stages {
+
+        // 🧾 Stage 1: Checkout Code
+        stage('Checkout Code') {
+            steps {
+                echo '📥 Checking out latest project code...'
+                git branch: "${GIT_BRANCH}", url: "${GIT_URL}"
+            }
+        }
+
+        // 🧱 Stage 2: Build Frontends
+        stage('Build & Test Frontend (V1 & V2)') {
+            steps {
+                echo '🏗️ Building frontend-v1 and frontend-v2...'
+                dir('frontend-v1') {
+                    bat 'npm install'
+                    bat 'npm run build'
+                }
+                dir('frontend-v2') {
+                    bat 'npm install'
+                    bat 'npm run build'
+                }
+            }
+        }
+
+        // ⚙️ Stage 3: Build Backend
+        stage('Build & Test Backend') {
+            steps {
+                echo '⚙️ Installing backend dependencies...'
+                dir('backend') {
+                    bat 'npm install'
+                }
+            }
+        }
+
+        // 🐳 Stage 4: Build Docker Images
+        stage('Build Docker Images') {
+            steps {
+                echo '🐳 Building Docker images via Compose...'
+                bat 'docker compose build'
+            }
+        }
+
+        // 📦 Stage 5: Push to DockerHub
+stage('Push to DockerHub') {
+    environment {
+        DOCKER_CRED = credentials('dockerhub-login')  // your DockerHub credential ID
+    }
+    steps {
+        echo '📦 Pushing Docker images to Docker Hub...'
+        bat """
+        echo Logging into DockerHub...
+        echo %DOCKER_CRED_PSW% | docker login -u %DOCKER_CRED_USR% --password-stdin
+
+        docker tag job-portal-canary-pipeline-web_v1:latest %DOCKER_CRED_USR%/job-portal-canary-web_v1:latest
+        docker tag job-portal-canary-pipeline-web_v2:latest %DOCKER_CRED_USR%/job-portal-canary-web_v2:latest
+        docker tag job-portal-canary-pipeline-backend:latest %DOCKER_CRED_USR%/job-portal-canary-backend:latest
+
+        docker push %DOCKER_CRED_USR%/job-portal-canary-web_v1:latest
+        docker push %DOCKER_CRED_USR%/job-portal-canary-web_v2:latest
+        docker push %DOCKER_CRED_USR%/job-portal-canary-backend:latest
+
+        docker logout
+        """
+    }
+}
+
+
+        // ⚙️ Stage 6: Prepare EC2 Environment
+        stage('Prepare EC2 Environment') {
+            steps {
+                echo '🔧 Preparing EC2 environment (folders, configs, env file)...'
+                script {
+                    def remoteCmd = '''
+                        # 🧹 Clean existing Docker installation
+                        sudo apt remove -y docker docker-engine docker.io containerd runc || true &&
+                        sudo apt update -y &&
+                        sudo apt install -y ca-certificates curl gnupg lsb-release git &&
+                        sudo mkdir -p /etc/apt/keyrings &&
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg &&
+                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+                        https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+                        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null &&
+                        sudo apt update -y &&
+                        sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin git &&
+                        sudo systemctl enable docker &&
+                        sudo systemctl start docker &&
+
+                        # 📂 Clone and prepare project
+                        if [ ! -d /home/ubuntu/job-portal-canary ]; then
+                            git clone https://github.com/AkashReddy123/job-portal-canary.git /home/ubuntu/job-portal-canary;
+                        else
+                            cd /home/ubuntu/job-portal-canary && git pull;
+                        fi &&
+
+                        sudo cp -r /home/ubuntu/job-portal-canary/{frontend-v1,frontend-v2,backend,nginx} /home/ubuntu/ &&
+                        sudo cp /home/ubuntu/job-portal-canary/docker-compose.yml /home/ubuntu/ &&
+                        sudo cp /home/ubuntu/job-portal-canary/nginx_90_10.conf /home/ubuntu/ &&
+                        sudo cp /home/ubuntu/job-portal-canary/nginx_100.conf /home/ubuntu/ &&
+
+                        # 🌿 Create .env for backend
+                        if [ ! -f /home/ubuntu/backend/.env ]; then
+                            echo "PORT=5000" > /home/ubuntu/backend/.env &&
+                            echo "MONGO_URI=mongodb://mongo:27017/jobportal" >> /home/ubuntu/backend/.env &&
+                            echo "JWT_SECRET=supersecretkey" >> /home/ubuntu/backend/.env &&
+                            echo "NODE_ENV=production" >> /home/ubuntu/backend/.env;
+                        fi
+                    '''.replaceAll("\\r?\\n", " ").trim()
+
+                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                }
+            }
+        }
+
+        // 🚀 Stage 7: Deploy Application
+        stage('Deploy on EC2') {
+            steps {
+                echo '🚀 Deploying latest images via Docker Compose...'
+                script {
+                    def remoteCmd = '''
+                        docker pull balaakashreddyy/job-portal-canary-web_v1:latest &&
+                        docker pull balaakashreddyy/job-portal-canary-web_v2:latest &&
+                        docker pull balaakashreddyy/job-portal-canary-backend:latest &&
+                        cd /home/ubuntu && docker compose up -d --build
+                    '''.replaceAll("\\r?\\n", " ").trim()
+
+                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                }
+            }
+        }
+
+        // 🔀 Stage 8: 90/10 Canary Split
+        stage('Traffic Split 90/10 Canary') {
+            steps {
+                echo '🔀 Applying 90/10 traffic split (V1→V2)...'
+                script {
+                    def remoteCmd = "sudo cp /home/ubuntu/nginx_90_10.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
+                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                }
+            }
+        }
+
+        // 🔥 Stage 9: Promote to 100%
+        stage('Promote Canary to 100%') {
+            steps {
+                echo '🔥 Promoting Canary (V2 → 100%)...'
+                script {
+                    def remoteCmd = "sudo cp /home/ubuntu/nginx_100.conf /home/ubuntu/nginx_active.conf && docker restart nginx_lb"
+                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                }
+            }
+        }
+
+        // 🧹 Stage 10: Cleanup
+        stage('Cleanup Old Containers') {
+            steps {
+                echo '🧹 Cleaning up old containers and images...'
+                script {
+                    def remoteCmd = "docker stop web_v1 || true && docker rm web_v1 || true && docker image prune -af"
+                    bat "plink -batch -i \"${PPK_PATH}\" -hostkey \"${HOST_KEY}\" ubuntu@${EC2_IP} \"${remoteCmd}\""
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Canary deployment successful! 🎉'
+        }
+        failure {
+            echo '❌ Deployment failed — Check Jenkins logs for details.'
+        }
+    }
+}
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_USER = 'balaakashreddyy'
+        DOCKERHUB_PASS = credentials('dockerhub-login')  // Jenkins credential ID
+        EC2_IP = '18.212.119.91'
+        PPK_PATH = 'C:\\Users\\Y BALA AKASH REDDY\\Downloads\\latest-key-2.ppk'
+        GIT_URL = 'https://github.com/AkashReddy123/job-portal-canary.git'
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                echo "📥 Checking out project source from GitHub..."
-                withCredentials([usernamePassword(credentialsId: 'github-creds', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
-                    git branch: 'main', url: "https://${GIT_USER}:${GIT_PASS}@github.com/AkashReddy123/job-portal-canary.git"
-                }
+                echo '📥 Checking out latest code...'
+                git branch: 'main', url: "${GIT_URL}"
             }
         }
 
-        stage('Build Frontend V1 & V2') {
+        stage('Build Frontend (V1 & V2)') {
             steps {
-                echo "🏗️ Building Frontend V1..."
+                echo '🏗️ Building frontend versions...'
                 dir('frontend-v1') {
                     bat 'npm install'
                     bat 'npm run build'
                 }
-
-                echo "🏗️ Building Frontend V2..."
                 dir('frontend-v2') {
                     bat 'npm install'
                     bat 'npm run build'
@@ -35,7 +222,7 @@ pipeline {
 
         stage('Build Backend') {
             steps {
-                echo "⚙️ Installing backend dependencies..."
+                echo '⚙️ Installing backend dependencies...'
                 dir('backend') {
                     bat 'npm install'
                 }
@@ -44,46 +231,54 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                echo "🐳 Building Docker images for all services..."
-                bat 'docker-compose build'
+                echo '🐳 Building Docker images...'
+                bat 'docker compose build'
             }
         }
 
         stage('Push to DockerHub') {
             steps {
-                echo "🔐 Logging in to DockerHub..."
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-login', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    bat '''
-                        echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
-
-                        docker tag web_v1 %REGISTRY%/%APP_NAME%-web_v1:latest
-                        docker tag web_v2 %REGISTRY%/%APP_NAME%-web_v2:latest
-                        docker tag backend %REGISTRY%/%APP_NAME%-backend:latest
-
-                        docker push %REGISTRY%/%APP_NAME%-web_v1:latest
-                        docker push %REGISTRY%/%APP_NAME%-web_v2:latest
-                        docker push %REGISTRY%/%APP_NAME%-backend:latest
-
-                        docker logout
-                    '''
-                }
+                echo '📦 Pushing Docker images to Docker Hub...'
+                bat '''
+                    echo Logging into DockerHub...
+                    echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin
+                    docker tag job-portal-canary-pipeline-web_v1:latest %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
+                    docker tag job-portal-canary-pipeline-web_v2:latest %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
+                    docker tag job-portal-canary-pipeline-backend:latest %DOCKERHUB_USER%/job-portal-canary-backend:latest
+                    docker push %DOCKERHUB_USER%/job-portal-canary-web_v1:latest
+                    docker push %DOCKERHUB_USER%/job-portal-canary-web_v2:latest
+                    docker push %DOCKERHUB_USER%/job-portal-canary-backend:latest
+                '''
             }
         }
 
-        // 🚫 Temporarily disabling EC2 deploy stage
-        // stage('Deploy to EC2') {
-        //     steps {
-        //         echo 'Skipping EC2 deployment — not configured yet 🚫'
-        //     }
-        // }
+        stage('Deploy on EC2') {
+            steps {
+                echo '🚀 Deploying latest images on EC2...'
+                script {
+                    def deployCmd = '''
+                        cd /home/ubuntu &&
+                        docker compose down &&
+                        docker compose pull &&
+                        docker compose up -d --build
+                    '''.replaceAll("\\r?\\n", " ").trim()
+
+                    bat """
+                        echo off
+                        echo y | plink -ssh -i "${PPK_PATH}" ubuntu@${EC2_IP} exit >NUL 2>&1
+                        plink -ssh -batch -no-antispoof -i "${PPK_PATH}" ubuntu@${EC2_IP} "${deployCmd}"
+                    """
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo "✅ Build and Push successful! Images pushed to DockerHub: ${REGISTRY}/${APP_NAME}"
+            echo '✅ Deployment completed successfully!'
         }
         failure {
-            echo "❌ Build failed! Check Jenkins logs for details."
+            echo '❌ Deployment failed — check Jenkins logs.'
         }
     }
 }
